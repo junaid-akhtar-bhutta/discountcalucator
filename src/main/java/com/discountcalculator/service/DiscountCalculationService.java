@@ -7,5 +7,5 @@ import java.math.BigDecimal;
 public interface DiscountCalculationService {
 
 
-    BigDecimal getNetDiscountedAmount(BillCalculationRequest calculationRequest);
+    BigDecimal getNetDiscountedAmount(BillCalculationRequest calculationRequest, BigDecimal totalBillAmount);
 }

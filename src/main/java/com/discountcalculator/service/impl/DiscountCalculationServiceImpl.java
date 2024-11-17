@@ -5,6 +5,7 @@ import com.discountcalculator.model.BillCalculationRequest;
 import com.discountcalculator.model.Item;
 import com.discountcalculator.model.ItemCategory;
 import com.discountcalculator.model.UserType;
+import com.discountcalculator.service.CurrencyConversionService;
 import com.discountcalculator.service.DiscountCalculationService;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -21,14 +22,15 @@ public class DiscountCalculationServiceImpl implements DiscountCalculationServic
     private static int FIXED_DISCOUNT_AMT_IN_USD = 5;
     private static int FIXED_DISCOUNT_BILL_AMT_IN_USD = 100;
 
-    private final ForeignExchangeService foreignExchangeService;
+    private final CurrencyConversionService currencyConversionService;
 
     @Override
-    public BigDecimal getNetDiscountedAmount(BillCalculationRequest calculationRequest) {
+    public BigDecimal getNetDiscountedAmount(BillCalculationRequest calculationRequest, BigDecimal totalBillAmount) {
 
         BigDecimal percentageDiscount = getPercentageDiscount(calculationRequest);
+        BigDecimal fixedDiscount = getFixedDiscount(totalBillAmount, calculationRequest.getOriginalCurrency());
 
-        return percentageDiscount.add(getFixedDiscount(percentageDiscount, calculationRequest.getOriginalCurrency()));
+        return percentageDiscount.add(fixedDiscount);
     }
 
 
@@ -58,18 +60,21 @@ public class DiscountCalculationServiceImpl implements DiscountCalculationServic
 
     private BigDecimal getFixedDiscount(BigDecimal netAmount, String baseCcy) {
 
-        BigDecimal netAmountInUSD = foreignExchangeService.currencyConversion(netAmount, baseCcy, "USD");
+        BigDecimal netAmountInUSD = currencyConversionService.currencyConversion(netAmount, baseCcy, "USD");
 
-        BigDecimal increments = netAmountInUSD.divide(BigDecimal.valueOf(FIXED_DISCOUNT_BILL_AMT_IN_USD));
+        BigDecimal increments = netAmountInUSD.divide(
+                BigDecimal.valueOf(FIXED_DISCOUNT_BILL_AMT_IN_USD),
+                0,
+                RoundingMode.FLOOR);
         BigDecimal discountAmtInUSD = increments.multiply(BigDecimal.valueOf(FIXED_DISCOUNT_AMT_IN_USD));
 
-        return foreignExchangeService.currencyConversion(discountAmtInUSD, "USD", baseCcy);
+        return currencyConversionService.currencyConversion(discountAmtInUSD, "USD", baseCcy);
     }
 
     private BigDecimal getTotalBillExcludingIgnoredCategories(BillCalculationRequest calculationRequest) {
 
         return calculationRequest.getItems().stream()
-                .filter(item -> item.getCategory().equals(ItemCategory.GROCERIES))
+                .filter(item -> !ItemCategory.GROCERIES.equals(item.getCategory()))
                 .map(Item::getPrice).reduce(
                         BigDecimal.ZERO,
                         BigDecimal::add);
